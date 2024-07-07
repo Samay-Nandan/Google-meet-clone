@@ -1,36 +1,42 @@
 "use client";
 
-import { useState } from "react";
-import { useSocket } from "@app/hooks";
+import { useState, ChangeEvent } from "react";
+import { Input, Button } from "@material-ui/core";
+import "@app/styles/home.css";
 
 const Home = () => {
-  const [message, setMessage] = useState("");
-  const { messages, sendMessage } = useSocket("/api/socket");
+  const [meetingUrl, setMeetingUrl] = useState("");
 
-  const handleSendMessage = () => {
-    if (!message) return;
-    sendMessage(message);
-    setMessage("");
+  const handleUrlChange = (event: ChangeEvent<HTMLInputElement>) =>
+    setMeetingUrl(event.target.value);
+
+  const generateMeetingUrl = () =>
+    meetingUrl
+      ? meetingUrl.split("/").pop()
+      : Math.random().toString(36).substring(2, 7);
+
+  const handleJoinMeeting = () => {
+    window.location.href = "/" + generateMeetingUrl();
   };
 
   return (
-    <div>
-      <h1>Socket.io with Next.js and TypeScript</h1>
-      <div>
-        <input
-          type="text"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
+    <div className="container">
+      <header className="header">
+        <h1>Video Meeting</h1>
+        <p>
+          Stay connected with your friends through our seamless video
+          conferencing solution.
+        </p>
+      </header>
+      <div className="input-container">
+        <Input
+          placeholder="Enter meeting URL or leave blank to create new"
+          onChange={handleUrlChange}
+          fullWidth
         />
-        <button onClick={handleSendMessage}>Send</button>
-      </div>
-      <div>
-        <h2>Messages</h2>
-        <ul>
-          {messages.map((msg, index) => (
-            <li key={index}>{msg}</li>
-          ))}
-        </ul>
+        <Button variant="contained" color="primary" onClick={handleJoinMeeting}>
+          Go
+        </Button>
       </div>
     </div>
   );
