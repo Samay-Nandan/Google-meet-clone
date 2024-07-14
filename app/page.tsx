@@ -21,16 +21,16 @@ const Home = () => {
   const handleUserNameChange = (event: ChangeEvent<HTMLInputElement>) =>
     setUserName(event.target.value);
 
-  const extractMeetingCode = () =>
+  const getMeetingCodeFromUrl = () =>
     meetingUrl ? meetingUrl.split("/").pop() : meetingCode;
 
   const handleJoinMeeting = () => {
-    window.location.href = `/${extractMeetingCode()}`;
+    window.location.href = `/${getMeetingCodeFromUrl()}`;
   };
 
   return (
     <div className="container">
-      <header className="header">
+      <header>
         <h1>Video Meeting</h1>
         <p>
           Stay connected with your friends through our seamless video
@@ -51,7 +51,7 @@ const Home = () => {
           disableUnderline
         />
         <Button variant="contained" color="primary" onClick={handleJoinMeeting}>
-          Go
+          Join Meeting
         </Button>
       </div>
     </div>
