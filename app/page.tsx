@@ -1,22 +1,31 @@
 "use client";
 
-import { useState, ChangeEvent } from "react";
+import { useState, useEffect, ChangeEvent } from "react";
 import { Input, Button } from "@material-ui/core";
+import { faker } from "@faker-js/faker";
 import "@app/styles/home.css";
 
 const Home = () => {
   const [meetingUrl, setMeetingUrl] = useState("");
+  const [meetingCode, setMeetingCode] = useState("");
+  const [userName, setUserName] = useState("");
 
-  const handleUrlChange = (event: ChangeEvent<HTMLInputElement>) =>
+  useEffect(() => {
+    setUserName(faker.internet.userName());
+    setMeetingCode(faker.string.uuid());
+  }, []);
+
+  const handleMeetingUrlChange = (event: ChangeEvent<HTMLInputElement>) =>
     setMeetingUrl(event.target.value);
 
-  const generateMeetingUrl = () =>
-    meetingUrl
-      ? meetingUrl.split("/").pop()
-      : Math.random().toString(36).substring(2, 7);
+  const handleUserNameChange = (event: ChangeEvent<HTMLInputElement>) =>
+    setUserName(event.target.value);
+
+  const extractMeetingCode = () =>
+    meetingUrl ? meetingUrl.split("/").pop() : meetingCode;
 
   const handleJoinMeeting = () => {
-    window.location.href = "/" + generateMeetingUrl();
+    window.location.href = `/${extractMeetingCode()}`;
   };
 
   return (
@@ -30,9 +39,16 @@ const Home = () => {
       </header>
       <div className="input-container">
         <Input
-          placeholder="Enter meeting URL or leave blank to create new"
-          onChange={handleUrlChange}
+          placeholder={`Enter or use the generated name: ${userName}`}
+          onChange={handleUserNameChange}
           fullWidth
+          disableUnderline
+        />
+        <Input
+          placeholder={`Enter or use the generated meeting code: ${meetingCode}`}
+          onChange={handleMeetingUrlChange}
+          fullWidth
+          disableUnderline
         />
         <Button variant="contained" color="primary" onClick={handleJoinMeeting}>
           Go
