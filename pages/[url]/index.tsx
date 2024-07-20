@@ -1,4 +1,13 @@
-import { useState, useRef, ChangeEvent, Dispatch, SetStateAction } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  ChangeEvent,
+  Dispatch,
+  SetStateAction,
+} from "react";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import {
   Button,
   Input,
@@ -32,12 +41,13 @@ const VideoChat = () => {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isScreenAvailable, setIsScreenAvailable] = useState(true);
   const [isInviteLinkCopied, setIsInviteLinkCopied] = useState(false);
-
   const [newMessagesCount, setNewMessagesCount] = useState(0);
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [message, setMessage] = useState("");
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const videoStreamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
 
   const handleInputChange =
     (setter: Dispatch<SetStateAction<string>>) =>
@@ -107,16 +117,111 @@ const VideoChat = () => {
     </Modal>
   );
 
+  const toggleAudio = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream
+        .getAudioTracks()
+        .forEach((track) => (track.enabled = !isAudioEnabled));
+      setIsAudioEnabled(!isAudioEnabled);
+    } catch (error) {
+      handleMediaError(error);
+    }
+  };
+
+  const toggleVideo = async () => {
+    setIsVideoEnabled((prev) => !prev);
+  };
+
+  const startVideo = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play().catch((error) => {
+          console.error("Error playing video: ", error);
+        });
+      }
+      videoStreamRef.current = stream;
+    } catch (error) {
+      handleMediaError(error);
+    }
+  };
+
+  useEffect(() => {
+    if (isVideoEnabled) startVideo();
+    else stopVideoStream();
+
+    return () => {
+      stopVideoStream();
+      stopScreenSharing();
+    };
+  }, [isVideoEnabled]);
+
+  const stopVideoStream = () => {
+    if (videoStreamRef.current) {
+      videoStreamRef.current.getTracks().forEach((track) => track.stop());
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+      videoStreamRef.current = null;
+    }
+  };
+
+  const toggleScreenSharing = async () => {
+    if (isScreenSharing) stopScreenSharing();
+    else startScreenSharing();
+  };
+
+  const startScreenSharing = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+      });
+      screenStreamRef.current = stream;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play().catch((error) => {
+          console.error("Error playing screen sharing video: ", error);
+        });
+      }
+      setIsScreenSharing(true);
+      stream.getTracks()[0].addEventListener("ended", () => {
+        stopScreenSharing();
+      });
+    } catch (error) {
+      handleMediaError(error);
+    }
+  };
+
+  const stopScreenSharing = () => {
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((track) => track.stop());
+      screenStreamRef.current = null;
+      setIsScreenSharing(false);
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = videoStreamRef.current;
+      }
+    }
+  };
+
+  const handleMediaError = (error: unknown) =>
+    error instanceof Error &&
+    toast.error(error.message, { toastId: error.message });
+
   const Controls = () => (
     <div className="controls-container">
-      <IconButton onClick={toggleState(setIsAudioEnabled)}>
+      <IconButton onClick={toggleAudio}>
         {isAudioEnabled ? (
           <Mic style={{ color: "#4caf50" }} />
         ) : (
           <MicOffOutlined style={{ color: "#f44336" }} />
         )}
       </IconButton>
-      <IconButton onClick={toggleState(setIsVideoEnabled)}>
+      <IconButton onClick={toggleVideo}>
         {isVideoEnabled ? (
           <Videocam style={{ color: "#4caf50" }} />
         ) : (
@@ -124,11 +229,11 @@ const VideoChat = () => {
         )}
       </IconButton>
       {isScreenAvailable && (
-        <IconButton onClick={toggleState(setIsScreenSharing)}>
+        <IconButton onClick={toggleScreenSharing}>
           {isScreenSharing ? (
-            <ScreenShare style={{ color: "#2196f3" }} />
-          ) : (
             <StopScreenShareOutlined style={{ color: "#f44336" }} />
+          ) : (
+            <ScreenShare style={{ color: "#2196f3" }} />
           )}
         </IconButton>
       )}
@@ -174,6 +279,7 @@ const VideoChat = () => {
 
   return (
     <>
+      <ToastContainer />
       <ChatModal />
       <InviteLink />
       <VideoContainer />
