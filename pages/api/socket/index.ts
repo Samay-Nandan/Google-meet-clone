@@ -2,7 +2,13 @@ import { Server as HTTPServer } from "http";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Server as IOServer, Socket } from "socket.io";
 
-const setupSocketServer = (httpServer: HTTPServer): IOServer => {
+interface SignalData {
+  roomId: string;
+  signal: RTCSessionDescriptionInit | RTCIceCandidate;
+  userId: string;
+}
+
+const initializeSocketServer = (httpServer: HTTPServer): IOServer => {
   const io = new IOServer(httpServer, {
     path: "/api/socket",
   });
@@ -12,14 +18,26 @@ const setupSocketServer = (httpServer: HTTPServer): IOServer => {
 
 const handleConnection = (socket: Socket): void => {
   console.log(`User connected: ${socket.id}`);
-  socket.on("send_message", (message) => handleMessage(socket, message));
   socket.on("disconnect", () => handleDisconnect(socket));
+  socket.on("join-room", (roomId, userId) =>
+    handleJoinRoom(socket, roomId, userId)
+  );
+  socket.on("signal", (data) => handleSignal(socket, data));
 };
 
-const handleMessage = (socket: Socket, message: string): void => {
-  console.log(`Message from ${socket.id}: ${message}`);
-  socket.broadcast.emit("receive_message", message);
+const handleJoinRoom = (
+  socket: Socket,
+  roomId: string,
+  userId: string
+): void => {
+  socket.join(roomId);
+  socket.broadcast
+    .to(roomId)
+    .emit("user-connected", { userId, socketId: socket.id });
 };
+
+const handleSignal = (socket: Socket, { roomId, signal, userId }: SignalData) =>
+  socket.broadcast.to(roomId).emit("signal", { signal, userId });
 
 const handleDisconnect = (socket: Socket): void =>
   console.log(`User disconnected: ${socket.id}`);
@@ -30,7 +48,7 @@ const SocketHandler = (
 ): void => {
   if (!response.socket.server.io) {
     console.log("Setting up socket.io server...");
-    response.socket.server.io = setupSocketServer(response.socket.server);
+    response.socket.server.io = initializeSocketServer(response.socket.server);
   } else {
     console.log("Socket.io server already set up");
   }

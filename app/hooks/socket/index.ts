@@ -1,31 +1,125 @@
-import { useEffect, useState, useCallback } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  RefObject,
+  createRef,
+} from "react";
 import { io, Socket } from "socket.io-client";
+import SimplePeer from "simple-peer";
+import { faker } from "@faker-js/faker";
 
-export const useSocket = (path: string) => {
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [messages, setMessages] = useState<string[]>([]);
+interface PeerData {
+  peer: SimplePeer.Instance;
+  userId: string;
+}
 
-  const handleConnect = () => console.log("Connected to server");
+interface SignalData {
+  signal: SimplePeer.SignalData;
+  userId: string;
+}
 
-  const handleMessageReceive = (message: string) =>
-    setMessages((prevMessages) => [...prevMessages, message]);
+export const useSocket = () => {
+  const [peers, setPeers] = useState<PeerData[]>([]);
+  const [remoteVideoRefs, setRemoteVideoRefs] = useState<
+    Record<string, RefObject<HTMLVideoElement>>
+  >({});
+  const socketRef = useRef<Socket | null>(null);
+  const userIdRef = useRef<string>("");
+  const localVideoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    const socketInstance = io({ path });
+    initializeUserId();
+    connectSocket();
+    startCall();
 
-    socketInstance.on("connect", handleConnect);
-    socketInstance.on("receive_message", handleMessageReceive);
+    return () => {
+      disconnectSocket();
+    };
+  }, []);
 
-    setSocket(socketInstance);
-  }, [path]);
+  const initializeUserId = () => {
+    if (!userIdRef.current) {
+      const storedUserId = sessionStorage.getItem("userId");
+      if (storedUserId) {
+        userIdRef.current = storedUserId;
+      } else {
+        userIdRef.current = faker.string.uuid();
+        sessionStorage.setItem("userId", userIdRef.current);
+      }
+    }
+  };
 
-  const sendMessage = useCallback(
-    (message: string) => {
-      if (!socket) return;
-      socket.emit("send_message", message);
+  const connectSocket = () => {
+    socketRef.current = io();
+
+    socketRef.current.on("user-connected", handleUserConnected);
+    socketRef.current.on("signal", handleSignal);
+    socketRef.current.on("disconnect", handleDisconnect);
+  };
+
+  const disconnectSocket = () => {
+    socketRef.current?.disconnect();
+    peers.forEach((peerData) => peerData.peer.destroy());
+    setPeers([]);
+    setRemoteVideoRefs({});
+  };
+
+  const createPeer = (userId: string, initiator: boolean) => {
+    const peer = new SimplePeer({
+      initiator,
+      trickle: false,
+      stream: localVideoRef.current?.srcObject as MediaStream,
+    });
+
+    peer.on("signal", (signal) =>
+      socketRef.current?.emit("signal", { userId, signal })
+    );
+
+    peer.on("stream", (stream) => {
+      const videoRef = remoteVideoRefs[userId];
+      if (videoRef?.current) {
+        videoRef.current.srcObject = stream;
+      }
+    });
+
+    return peer;
+  };
+
+  const handleUserConnected = ({
+    userId,
+    socketId,
+  }: {
+    userId: string;
+    socketId: string;
+  }) => {
+    const isInitiator = socketRef.current?.id === socketId;
+    const peer = createPeer(socketId, isInitiator);
+
+    setPeers((prevPeers) => [...prevPeers, { peer, userId }]);
+    setRemoteVideoRefs((prevRefs) => ({
+      ...prevRefs,
+      [userId]: createRef<HTMLVideoElement>(),
+    }));
+  };
+
+  const handleSignal = useCallback(
+    ({ signal, userId }: SignalData) => {
+      const peerData = peers.find((p) => p.userId === userId);
+      if (peerData) peerData.peer.signal(signal);
     },
-    [socket]
+    [peers]
   );
 
-  return { socket, messages, sendMessage };
+  const handleDisconnect = () => disconnectSocket();
+
+  const startCall = () => {
+    const roomId =
+      typeof window !== "undefined" &&
+      window.location.pathname.split("/").pop();
+    socketRef.current?.emit("join-room", roomId, userIdRef.current);
+  };
+
+  return { peers, remoteVideoRefs, socketRef, localVideoRef };
 };
