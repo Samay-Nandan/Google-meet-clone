@@ -34,9 +34,7 @@ export const useSocket = () => {
     connectSocket();
     startCall();
 
-    return () => {
-      disconnectSocket();
-    };
+    return () => disconnectSocket();
   }, []);
 
   const initializeUserId = () => {
@@ -52,7 +50,7 @@ export const useSocket = () => {
   };
 
   const connectSocket = () => {
-    socketRef.current = io();
+    socketRef.current = io({ path: "/api/socket" });
 
     socketRef.current.on("user-connected", handleUserConnected);
     socketRef.current.on("signal", handleSignal);

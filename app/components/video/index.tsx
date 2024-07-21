@@ -5,11 +5,19 @@ interface VideoProps {
   remoteVideoRefs: Record<string, RefObject<HTMLVideoElement>>;
 }
 
-export const Video: FC<VideoProps> = ({ localVideoRef, remoteVideoRefs }) => (
+const VideoContainer: FC<{ refObj: RefObject<HTMLVideoElement> }> = ({
+  refObj,
+}) => (
   <div className="video-container">
-    <video ref={localVideoRef} autoPlay muted />
-    {Object.values(remoteVideoRefs).map((ref, index) => (
-      <video key={index} ref={ref} autoPlay />
+    <video ref={refObj} autoPlay muted />
+  </div>
+);
+
+export const Video: FC<VideoProps> = ({ localVideoRef, remoteVideoRefs }) => (
+  <div className="videos">
+    <VideoContainer refObj={localVideoRef} />
+    {Object.entries(remoteVideoRefs).map(([key, ref]) => (
+      <VideoContainer key={key} refObj={ref} />
     ))}
   </div>
 );

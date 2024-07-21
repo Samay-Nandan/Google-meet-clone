@@ -9,12 +9,17 @@ body {
   transition: background-color 0.3s ease-in-out;
 }
 
+.videos {
+  display: flex;
+  justify-content: center;
+}
+
 .video-container {
   background: #ffffff;
   width: 75%;
   padding: 40px;
-  min-width: 400px;
-  margin: auto;
+  max-width: 600px;
+  margin: 20px;
   text-align: center;
   justify-content: center;
   border-radius: 10px;
