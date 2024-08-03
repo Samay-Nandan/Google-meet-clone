@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { Socket } from "socket.io-client";
-import { Instance } from "simple-peer";
 import {
   Videocam,
   CallEnd,
@@ -16,7 +15,7 @@ import { toast } from "react-toastify";
 interface ControlsProps {
   localVideoRef: React.RefObject<HTMLVideoElement>;
   socket: Socket;
-  peers: Instance[];
+  peers: RTCPeerConnection[];
 }
 
 export const Controls: React.FC<ControlsProps> = ({
@@ -62,7 +61,11 @@ export const Controls: React.FC<ControlsProps> = ({
         });
       }
       videoStreamRef.current = stream;
-      peers.forEach((peer) => peer.addStream(stream));
+      peers.forEach((peer) => {
+        stream.getTracks().forEach((track) => {
+          peer.addTrack(track, stream);
+        });
+      });
     } catch (error) {
       handleMediaError(error);
     }

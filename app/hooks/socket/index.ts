@@ -7,16 +7,20 @@ import {
   createRef,
 } from "react";
 import { io, Socket } from "socket.io-client";
-import SimplePeer from "simple-peer";
 import { faker } from "@faker-js/faker";
 
 interface PeerData {
-  peer: SimplePeer.Instance;
+  peer: RTCPeerConnection;
   userId: string;
 }
 
+interface RTCSignal {
+  sdp?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
+}
+
 interface SignalData {
-  signal: SimplePeer.SignalData;
+  signal: RTCSignal;
   userId: string;
 }
 
@@ -61,28 +65,51 @@ export const useSocket = () => {
 
   const disconnectSocket = () => {
     socketRef.current?.disconnect();
-    peers.forEach((peerData) => peerData.peer.destroy());
+    peers.forEach((peerData) => {
+      peerData.peer.getSenders().forEach((sender) => {
+        peerData.peer.removeTrack(sender);
+      });
+      peerData.peer.close();
+    });
     setPeers([]);
     setRemoteVideoRefs({});
   };
 
   const createPeer = (userId: string, initiator: boolean) => {
-    const peer = new SimplePeer({
-      initiator,
-      trickle: false,
-      stream: localVideoRef.current?.srcObject as MediaStream,
+    const peer = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     });
 
-    peer.on("signal", (signal) =>
-      socketRef.current?.emit("signal", { userId, signal })
-    );
+    if (localVideoRef.current?.srcObject) {
+      (localVideoRef.current.srcObject as MediaStream)
+        .getTracks()
+        .forEach((track) => {
+          peer.addTrack(track, localVideoRef.current?.srcObject as MediaStream);
+        });
+    }
 
-    peer.on("stream", (stream) => {
+    peer.onicecandidate = (event) => {
+      if (event.candidate) {
+        socketRef.current?.emit("signal", {
+          userId,
+          signal: { candidate: event.candidate },
+        });
+      }
+    };
+
+    peer.ontrack = (event) => {
       const videoRef = remoteVideoRefs[userId];
       if (videoRef?.current) {
-        videoRef.current.srcObject = stream;
+        videoRef.current.srcObject = event.streams[0];
       }
-    });
+    };
+
+    if (initiator) {
+      peer.createOffer().then((offer) => {
+        peer.setLocalDescription(offer);
+        socketRef.current?.emit("signal", { userId, signal: { sdp: offer } });
+      });
+    }
 
     return peer;
   };
@@ -102,9 +129,31 @@ export const useSocket = () => {
   );
 
   const handleSignal = useCallback(
-    ({ signal, userId }: SignalData) => {
+    async ({ signal, userId }: SignalData) => {
       const peerData = peers.find((p) => p.userId === userId);
-      if (peerData) peerData.peer.signal(signal);
+      if (peerData) {
+        try {
+          if (signal.sdp) {
+            await peerData.peer.setRemoteDescription(
+              new RTCSessionDescription(signal.sdp)
+            );
+            if (signal.sdp.type === "offer") {
+              const answer = await peerData.peer.createAnswer();
+              await peerData.peer.setLocalDescription(answer);
+              socketRef.current?.emit("signal", {
+                userId,
+                signal: { sdp: answer },
+              });
+            }
+          } else if (signal.candidate) {
+            await peerData.peer.addIceCandidate(
+              new RTCIceCandidate(signal.candidate)
+            );
+          }
+        } catch (error) {
+          console.error("Error handling signal: ", error);
+        }
+      }
     },
     [peers]
   );
