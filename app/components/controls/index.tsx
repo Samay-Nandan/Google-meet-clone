@@ -54,7 +54,6 @@ export const Controls: React.FC<ControlsProps> = ({
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
-        audio: true,
       });
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;

@@ -32,7 +32,6 @@ export const useSocket = () => {
   useEffect(() => {
     initializeUserId();
     connectSocket();
-    startCall();
 
     return () => disconnectSocket();
   }, []);
@@ -52,9 +51,12 @@ export const useSocket = () => {
   const connectSocket = () => {
     socketRef.current = io({ path: "/api/socket" });
 
-    socketRef.current.on("user-connected", handleUserConnected);
-    socketRef.current.on("signal", handleSignal);
-    socketRef.current.on("disconnect", handleDisconnect);
+    socketRef.current.on("connect", () => {
+      socketRef.current?.on("user-connected", handleUserConnected);
+      socketRef.current?.on("signal", handleSignal);
+      socketRef.current?.on("disconnect", handleDisconnect);
+      startCall();
+    });
   };
 
   const disconnectSocket = () => {
@@ -85,22 +87,19 @@ export const useSocket = () => {
     return peer;
   };
 
-  const handleUserConnected = ({
-    userId,
-    socketId,
-  }: {
-    userId: string;
-    socketId: string;
-  }) => {
-    const isInitiator = socketRef.current?.id === socketId;
-    const peer = createPeer(socketId, isInitiator);
+  const handleUserConnected = useCallback(
+    ({ userId, socketId }: { userId: string; socketId: string }) => {
+      const isInitiator = socketRef.current?.id === socketId;
+      const peer = createPeer(socketId, isInitiator);
 
-    setPeers((prevPeers) => [...prevPeers, { peer, userId }]);
-    setRemoteVideoRefs((prevRefs) => ({
-      ...prevRefs,
-      [userId]: createRef<HTMLVideoElement>(),
-    }));
-  };
+      setPeers((prevPeers) => [...prevPeers, { peer, userId }]);
+      setRemoteVideoRefs((prevRefs) => ({
+        ...prevRefs,
+        [userId]: createRef<HTMLVideoElement>(),
+      }));
+    },
+    [remoteVideoRefs]
+  );
 
   const handleSignal = useCallback(
     ({ signal, userId }: SignalData) => {
